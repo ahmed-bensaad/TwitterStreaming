@@ -6,7 +6,6 @@ import json
 from credentials import *
 
 
-my_auth = requests_oauthlib.OAuth1(CONSUMER_KEY, CONSUMER_SECRET,ACCESS_TOKEN, ACCESS_SECRET)
 
 
 def get_tweets():
@@ -19,8 +18,8 @@ def get_tweets():
 
 
 def send_tweets_to_spark(http_resp, tcp_connection):
-	for line in http_resp.iter_lines():
-    	try:
+    for line in http_resp.iter_lines():
+        try:
         	full_tweet = json.loads(line)
         	tweet_text = full_tweet['text']
         	print("Tweet Text: " + tweet_text)
@@ -33,6 +32,7 @@ def send_tweets_to_spark(http_resp, tcp_connection):
 
 
 def main():
+    my_auth = requests_oauthlib.OAuth1(CONSUMER_KEY, CONSUMER_SECRET,ACCESS_TOKEN, ACCESS_SECRET)
     TCP_IP = "localhost"
     TCP_PORT = 9009
     conn = None
