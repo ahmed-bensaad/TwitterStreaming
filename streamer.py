@@ -30,7 +30,7 @@ def process_rdd(time, rdd):
 	except:
     	e = sys.exc_info()[0]
     	print("Error: %s" % e)
-        
+
 def main():
 
     # initilize SparkContext
