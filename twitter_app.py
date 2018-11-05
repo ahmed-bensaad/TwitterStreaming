@@ -1,5 +1,5 @@
 import socket
-import sys
+#import sys
 import requests
 import requests_oauthlib
 import json
@@ -26,8 +26,9 @@ def send_tweets_to_spark(http_resp, tcp_connection):
         	print ("------------------------------------------")
         	tcp_connection.send(tweet_text + '\n')
     	except:
-        	e = sys.exc_info()[0]
-        	print("Error: %s" % e)
+		pass
+ #       	e = sys.exc_info()[0]
+ #      	print("Error: %s" % e)
 
 
 
@@ -45,5 +46,6 @@ def main():
     send_tweets_to_spark(resp, conn)
 
 if __name__ == '__main__':
-    my_auth = requests_oauthlib.OAuth1(ACCESS_TOKEN, ACCESS_SECRET, CONSUMER_KEY, CONSUMER_SECRET)
-    main()    
+#    my_auth = requests_oauthlib.OAuth1(ACCESS_TOKEN, ACCESS_SECRET, CONSUMER_KEY, CONSUMER_SECRET)
+     my_auth = requests_oauthlib.OAuth1( CONSUMER_KEY, CONSUMER_SECRET,ACCESS_TOKEN, ACCESS_SECRET)
+     main()    
