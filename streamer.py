@@ -25,12 +25,10 @@ def process_rdd(time, rdd):
     		# get the top 10 hashtags from the table using SQL and print them
     		hashtag_counts_df = sql_context.sql("select hashtag, hashtag_count from hashtags order by hashtag_count desc limit 10")
     		hashtag_counts_df.show()
-    		# call this method to prepare top 10 hashtags DF and send them
-    		send_df_to_dashboard(hashtag_counts_df)
+
 	except:
-		pass
-#    		e = sys.exc_info()[0]
-#    		print("Error: %s" % e)
+   		e = sys.exc_info()[0]
+   		print("Error")
 
 def main():
 
