@@ -43,8 +43,8 @@ def main():
 
     # setting a checkpoint to allow RDD recovery
     ssc.checkpoint("checkpoint_TwitterApp")
-    # read data from port 9009
-    dataStream = ssc.socketTextStream("localhost",9009)
+    # read data from port 6006
+    dataStream = ssc.socketTextStream("localhost",6006)
 
 
 
