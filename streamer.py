@@ -1,34 +1,50 @@
 from pyspark import SparkContext
 from pyspark.streaming import StreamingContext
+from pyspark.sql import Row, SQLContext
+from pyspark.sql.functions import desc 
+
+from IPython import display
+import matplotlib.pyplot as plt
+import seaborn as sns
+import pandas as pd
+
+import time, json
+from datetime import datetime, timezone, timedelta, date
 
 
-def aggregate_tags_count(new_values, total_sum):
-	return sum(new_values) + (total_sum or 0)
-
-def get_sql_context_instance(spark_context):
-	if ('sqlContextSingletonInstance' not in globals()):
-		globals()['sqlContextSingletonInstance'] = SQLContext(spark_context)
-	return globals()['sqlContextSingletonInstance']
+# Subject of the tags
+subject = "france"
 
 
-def process_rdd(time, rdd):
-	print("----------- %s -----------" % str(time))
-	try:
-    		# Get spark sql singleton context from the current context
-    		sql_context = get_sql_context_instance(rdd.context)
-    		# convert the RDD to Row RDD
-    		row_rdd = rdd.map(lambda w: Row(hashtag=w[0], hashtag_count=w[1]))
-    		# create a DF from the Row RDD
-    		hashtags_df = sql_context.createDataFrame(row_rdd)
-    		# Register the dataframe as table
-    		hashtags_df.registerTempTable("hashtags")
-    		# get the top 10 hashtags from the table using SQL and print them
-    		hashtag_counts_df = sql_context.sql("select hashtag, hashtag_count from hashtags order by hashtag_count desc limit 10")
-    		hashtag_counts_df.show()
+def get_text_and_seconds(line):
+    msg = json.loads(line)
+    datetime_object = (
+        datetime
+        .strptime(msg['created_at'], '%a %b %d %H:%M:%S %z %Y')
+        .replace(tzinfo=timezone.utc).astimezone(tz=None)
+    )
+    seconds = int(datetime.now().strftime("%s")) - int(datetime_object.strftime("%s"))
+    return (msg['text'], seconds)
 
-	except:
-   		e = sys.exc_info()[0]
-   		print("Error")
+def rangev(seconds):
+    if seconds <= 30:
+        return 30
+    elif seconds <= 60:
+        return 60
+    else:
+        return 180
+
+def get_pairs(rdd):
+    return (
+        rdd.flatMap(lambda t: [(x, t[1]) for x in t[0].split(" ")]) # Split by space
+        .filter(lambda t: t[0].startswith("#"))   # Get only the hashtags
+        .map(lambda t: ((t[0], rangev(t[1])), 1))           # Associate each hashtag, range to 1
+        .updateStateByKey(lambda new_values, lastState: sum(new_values) + (lastState or 0))
+    )
+
+
+
+
 
 def main():
 
@@ -41,22 +57,74 @@ def main():
 
     # setting a checkpoint to allow RDD recovery
     ssc.checkpoint("checkpoint_TwitterApp")
-    # read data from port 6006
-    dataStream = ssc.socketTextStream("localhost",6006)
 
 
+    # Connect to the port that sends tweets
+    lines = ssc.socketTextStream('localhost', 7000).window(180)
 
-    # split each tweet into words
-    words = dataStream.flatMap(lambda line: line.split(" "))
-    # filter the words to get only hashtags, then map each hashtag to be a pair of (hashtag,1)
-    hashtags = words.filter(lambda w: '#' in w).map(lambda x: (x, 1))
-    # adding the count of each hashtag to its last count
-    tags_totals = hashtags.updateStateByKey(aggregate_tags_count)
-    # do processing for each RDD generated in each interval
-    tags_totals.foreachRDD(process_rdd)
-    # start the streaming computation
+
+    # Get (text, seconds) pairs
+    text_date = lines.map(get_text_and_seconds)
+
+    # Get key-value pairs of tweet counting
+    pairs = get_pairs(text_date)
+
+    # Register the results in sqlContext
+    (
+        pairs
+        .map(lambda w: Row(tag=w[0][0], rangev=w[0][1], count=w[1]))
+            .foreachRDD(
+                lambda rdd: (
+                    rdd.toDF()
+                    .sort(desc("count"))
+                    .limit(10)
+                    .registerTempTable("tweets")
+                )
+            ) 
+    )
+
     ssc.start()
-    # wait for the streaming to finish
+    for i in range(10):
+        # Wait for the gathering of result by spark
+        time.sleep(5)
+    
+        # Clear output and prepare it for the new plots
+        display.clear_output(wait=True)
+    
+        try:
+            df = sqlContext.sql("Select tag, rangev, count from tweets").toPandas()
+        
+            plt.figure(figsize=(20, 5))
+                
+            for i, threshold in enumerate([30, 60, 180]):
+                df_to_plot = (
+                    pd.DataFrame(
+                        df[df.rangev <= threshold]
+                        .groupby(['tag'])['count']
+                        .sum()
+                    )
+                    .reset_index()
+                    .sort_values("count", ascending=False)
+                )
+            
+                if (df_to_plot.empty):
+                    print("There is no hashtags in the last %d seconds" %threshold)
+                    continue
+            
+                plt.subplot(1, 3, i+1)
+                sns.barplot(
+                    x="tag", 
+                    y="count", 
+                    data=df_to_plot
+                )
+                plt.title("The 10 most popular hashtags in the last %d seconds" % threshold)
+                plt.xticks(rotation=45)
+        
+            plt.show()
+        
+        except:
+            print("Empty table")
+            continue
     ssc.awaitTermination()
 
 
